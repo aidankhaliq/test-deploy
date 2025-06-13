@@ -68,14 +68,37 @@ vision_model = genai.GenerativeModel('gemini-pro-vision')
 
 def get_db_connection():
     """
-    Creates and returns a connection to the SQLite database with proper configuration.
+    Creates and returns a connection to the database with proper configuration.
+    Uses PostgreSQL if DATABASE_URL is set, otherwise falls back to SQLite.
 
     Returns:
-        sqlite3.Connection: A configured database connection
+        sqlite3.Connection or psycopg2.extensions.connection: A configured database connection
     """
-    # Get the absolute path to the database file
-    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
+    # Check if DATABASE_URL is set (for PostgreSQL)
+    database_url = os.environ.get('DATABASE_URL')
     
+    if database_url:
+        # Use PostgreSQL
+        try:
+            import psycopg2
+            from psycopg2.extras import RealDictCursor
+            
+            # Parse the DATABASE_URL to get connection parameters
+            # Render provides a URL like: postgres://user:password@host:port/dbname
+            # We need to convert it to the format psycopg2 expects
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+            
+            conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+            return conn
+        except ImportError:
+            print("Warning: psycopg2 not installed. Falling back to SQLite.")
+        except Exception as e:
+            print(f"Error connecting to PostgreSQL: {e}")
+            print("Falling back to SQLite.")
+    
+    # Fallback to SQLite
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row  # This allows accessing columns by name
     conn.execute('PRAGMA busy_timeout = 30000')  # 30 second timeout to avoid locking issues

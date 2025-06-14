@@ -117,10 +117,11 @@ def get_user_id(email):
     conn = None
     try:
         conn = get_db_connection()
-        user = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        cur = get_cursor(conn)
+        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+        user = cur.fetchone()
         return user['id'] if user else None
     finally:
-        # Ensure connection is closed even if an exception occurs
         if conn:
             conn.close()
 
@@ -137,12 +138,12 @@ def check_login(email, password, security_answer):
         dict or None: User data if authentication succeeds, None otherwise
     """
     with get_db_connection() as conn:
-        user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        cur = get_cursor(conn)
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user = cur.fetchone()
         if user and check_password_hash(user['password'], password) and user['security_answer'] == security_answer:
-            # Check if account is active
             is_active = user['is_active'] if 'is_active' in user.keys() else 1
             if is_active == 0:
-                # Account is deactivated, return None but don't indicate why for security
                 return None
             return user
         return None
@@ -161,18 +162,17 @@ def register_user(username, email, password, security_answer):
         bool: True if registration succeeded, False otherwise
     """
     with get_db_connection() as conn:
-        # Check if email already exists
-        if conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone():
+        cur = get_cursor(conn)
+        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
             return False
-
         try:
-            conn.execute(
-                "INSERT INTO users (username, email, password, security_answer) VALUES (?, ?, ?, ?)",
+            cur.execute(
+                "INSERT INTO users (username, email, password, security_answer) VALUES (%s, %s, %s, %s)",
                 (username, email, generate_password_hash(password), security_answer))
             conn.commit()
             return True
-        except sqlite3.IntegrityError:
-            # This handles cases like username uniqueness constraint violations
+        except Exception:
             return False
 
 # --- Helper Functions ---

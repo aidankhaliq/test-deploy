@@ -2766,6 +2766,185 @@ def services():
 def contact():
     return render_template('contact.html')
 
+def get_cursor(conn):
+    """
+    Returns a cursor for the given connection, compatible with both SQLite and psycopg2.
+    """
+    if hasattr(conn, 'cursor'):
+        return conn.cursor()
+    return conn
+
+
+def create_tables_if_needed():
+    """
+    Creates all necessary tables if they do not exist (for PostgreSQL deployment).
+    Only runs if DATABASE_URL is set (i.e., using PostgreSQL).
+    """
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        return  # Only run for PostgreSQL
+    conn = get_db_connection()
+    cur = get_cursor(conn)
+    # Users table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            security_answer TEXT NOT NULL,
+            is_admin INTEGER DEFAULT 0,
+            reset_token TEXT,
+            bio TEXT,
+            urls TEXT,
+            profile_picture TEXT,
+            dark_mode INTEGER DEFAULT 0,
+            name TEXT,
+            phone TEXT,
+            location TEXT,
+            website TEXT,
+            avatar TEXT,
+            timezone TEXT,
+            datetime_format TEXT,
+            is_active INTEGER DEFAULT 1
+        )
+    ''')
+    # Quiz results table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS quiz_results_enhanced (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            difficulty TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            total INTEGER NOT NULL,
+            percentage REAL NOT NULL,
+            passed INTEGER DEFAULT 0,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            question_details TEXT NOT NULL,
+            points_earned INTEGER DEFAULT 0,
+            streak_bonus INTEGER DEFAULT 0,
+            time_bonus INTEGER DEFAULT 0
+        )
+    ''')
+    # Legacy quiz results table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS quiz_results (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            difficulty TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            total INTEGER NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Notifications table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            message TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_read INTEGER DEFAULT 0
+        )
+    ''')
+    # Achievements table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS achievements (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            achievement_type TEXT NOT NULL,
+            achievement_name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # User progress table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS user_progress (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            words_learned INTEGER DEFAULT 0,
+            conversation_count INTEGER DEFAULT 0,
+            accuracy_rate REAL DEFAULT 0,
+            daily_streak INTEGER DEFAULT 0,
+            last_activity_date DATE,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Study list table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS study_list (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            word TEXT NOT NULL,
+            note TEXT,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Chat sessions table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            session_id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            language TEXT NOT NULL,
+            started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Chat messages table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id SERIAL PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            message TEXT NOT NULL,
+            bot_response TEXT NOT NULL,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Quiz questions table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS quiz_questions (
+            id SERIAL PRIMARY KEY,
+            language TEXT NOT NULL,
+            difficulty TEXT NOT NULL,
+            question TEXT NOT NULL,
+            options TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            question_type TEXT DEFAULT 'multiple_choice',
+            points INTEGER DEFAULT 10,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    # Password resets table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL,
+            expiry TIMESTAMP NOT NULL
+        )
+    ''')
+    # Account activity table
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS account_activity (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            activity_type TEXT NOT NULL,
+            details TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    cur.close()
+    conn.close()
+
+# Call table creation at startup if using PostgreSQL
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    create_tables_if_needed()
+
 if __name__ == '__main__':
     ensure_user_columns()
     # Use environment variable for debug mode
